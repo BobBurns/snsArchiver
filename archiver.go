@@ -61,6 +61,10 @@ func main() {
 	p := Page{}
 	for scanner.Scan() {
 		link := scanner.Text()
+		// handle blank lines in txt file
+		if link == "" {
+			continue
+		}
 		linkUrl, err := url.Parse(link)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Bad url from file.[%s]\n", err)
@@ -69,6 +73,7 @@ func main() {
 		p.Url = linkUrl
 		p.Link = link
 
+		fmt.Println(linkUrl.Scheme)
 		if linkUrl.Scheme == "ftp" {
 			// do something with ftp
 			os.Exit(0)
@@ -171,7 +176,7 @@ func (p *Page) ScanHtml(n *html.Node) {
 			p.ReplaceLink("html", "href", n)
 			// don't append link
 		case "img":
-			p.ReplaceLink("img", "scr", n)
+			p.ReplaceLink("img", "src", n)
 		case "link":
 			p.ReplaceLink("resource", "href", n)
 		case "xlink":
@@ -210,6 +215,10 @@ func (p *Page) ReplaceLink(elem, key string, n *html.Node) {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error parsing url: [%s]\n", err)
 			}
+			// skip mail ref
+			if elem == "html" && u.Scheme == "mailto" {
+				break
+			}
 
 			link = p.Url.ResolveReference(u).String()
 			link = "/" + elem + "/" + link
@@ -227,3 +236,8 @@ func (p *Page) ReplaceLink(elem, key string, n *html.Node) {
 }
 
 // TODO iterate through resources and save them to right dir
+// func SaveResources
+// iterate through resources
+// get path to load use fetch with page link as url returns io.Reader
+// get path to save should be the same.  handle trailing slash
+// check if file exists already dont over write
