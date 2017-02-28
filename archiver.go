@@ -241,3 +241,24 @@ func (p *Page) ReplaceLink(elem, key string, n *html.Node) {
 // get path to load use fetch with page link as url returns io.Reader
 // get path to save should be the same.  handle trailing slash
 // check if file exists already dont over write
+func (p *Page) SaveResources() error {
+	direxp := regexp.MustCompile("/[[:alpha:]]+/")
+	for _, res := range p.Resources {
+		if _, err := os.Stat(res); !os.IsNotExist(err) {
+			// file exists so don't save it
+			continue
+		}
+		// trim /html/
+		getpath := strings.TrimPrefix(res, direxp.FindString(res))
+		p.Link = getpath
+		//TODO check robots.txt before get request
+		err = p.FetchBody()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error with Get Request during Save\n")
+			// keep going
+			continue
+		}
+		//TODO save to correct path base+res
+
+	}
+}
