@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temoto/robotstxt"
 	"golang.org/x/net/html"
 )
 
@@ -89,10 +91,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error updating html\n[%s]\n", err)
 		}
 
-		//		err = p.saveResources()
-		//		if err != nil {
-		//			fmt.Fprintf(os.stderr, "Error saving resources\n[%s]\n", err)
-		//		}
+		p.SaveResources()
 
 	}
 	for _, res := range p.Resources {
@@ -241,7 +240,7 @@ func (p *Page) ReplaceLink(elem, key string, n *html.Node) {
 // get path to load use fetch with page link as url returns io.Reader
 // get path to save should be the same.  handle trailing slash
 // check if file exists already dont over write
-func (p *Page) SaveResources() error {
+func (p *Page) SaveResources() {
 	direxp := regexp.MustCompile("/[[:alpha:]]+/")
 	for _, res := range p.Resources {
 		if _, err := os.Stat(res); !os.IsNotExist(err) {
@@ -250,8 +249,21 @@ func (p *Page) SaveResources() error {
 		}
 		// trim /html/
 		getpath := strings.TrimPrefix(res, direxp.FindString(res))
+
+		//check robots txt
+		resurl, _ := url.Parse(getpath)
+		resp, err := http.Get(resurl.Scheme + "://" + resurl.Host + "/robots.txt")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Bad url [%s]\n", err)
+			continue
+		}
+		robots, _ := robotstxt.FromResponse(resp)
+		if !robots.TestAgent(getpath, Agent) {
+			saveRobots(res)
+			continue
+		}
+
 		p.Link = getpath
-		//TODO check robots.txt before get request
 		err = p.FetchBody()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error with Get Request during Save\n")
@@ -259,6 +271,48 @@ func (p *Page) SaveResources() error {
 			continue
 		}
 		//TODO save to correct path base+res
+		//handle wordpress path
+		direxp := regexp.MustCompile("/$")
+		if direxp.MatchString(resurl.Path) {
+			resurl.Path = resurl.Path[:len(resurl.Path)-1]
+		}
+
+		b, err := ioutil.ReadAll(p.Response.Body)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading body. [%s]\n", err)
+			continue
+		}
+
+		//TODO get correct path
+		// /img/http://www.indiajoze.com/images/haji_firuz.jpg
+		splitpath := strings.Split(res, "/")
+		savep := SavePath + "/" + splitpath[1] + "/" + splitpath[4] + resurl.Path
+
+		err = os.MkdirAll(filepath.Dir(savep), os.ModePerm)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating path to save. [%s]\n", err)
+			continue
+		}
+
+		fmt.Println("Saving File ", savep)
+		f, err := os.Create(savep)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating file. [%s]\n", err)
+			continue
+		}
+
+		n, err := f.Write(b)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing file. [%s]\n", err)
+		}
+		fmt.Printf("Saving %d bytes to %s\n", n, savep)
+
+		f.Close()
+		p.Response.Body.Close()
 
 	}
+}
+
+func saveRobots(path string) {
+	fmt.Println("File protected by robots.txt ", path)
 }
