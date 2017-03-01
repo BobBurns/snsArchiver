@@ -293,19 +293,6 @@ func (p *Page) SaveResources() {
 		if err != nil {
 			continue
 		}
-		//
-		//		err = os.MkdirAll(filepath.Dir(savep), os.ModePerm)
-		//		if err != nil {
-		//			fmt.Fprintf(os.Stderr, "Error creating path to save. [%s]\n", err)
-		//			continue
-		//		}
-		//
-		//		fmt.Println("Saving File ", savep)
-		//		f, err := os.Create(savep)
-		//		if err != nil {
-		//			fmt.Fprintf(os.Stderr, "Error creating file. [%s]\n", err)
-		//			continue
-		//		}
 
 		n, err := f.Write(b)
 		if err != nil {
