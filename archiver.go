@@ -247,11 +247,23 @@ func (p *Page) SaveResources() {
 			// file exists so don't save it
 			continue
 		}
+		// get path and save path
 		// trim /html/
 		getpath := strings.TrimPrefix(res, direxp.FindString(res))
 
-		//check robots txt
+		//handle wordpress path
 		resurl, _ := url.Parse(getpath)
+		direxp := regexp.MustCompile("/$")
+		if direxp.MatchString(resurl.Path) {
+			resurl.Path = resurl.Path[:len(resurl.Path)-1]
+		}
+		// save to path ex.:
+		// from /img/http://www.indiajoze.com/images/haji_firuz.jpg
+		// to /img/www.indiajoze.com/images/haji_firuz.jpg
+		splitpath := strings.Split(res, "/")
+		savep := SavePath + "/" + splitpath[1] + "/" + splitpath[4] + resurl.Path
+
+		//check robots txt
 		resp, err := http.Get(resurl.Scheme + "://" + resurl.Host + "/robots.txt")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Bad url [%s]\n", err)
@@ -259,7 +271,7 @@ func (p *Page) SaveResources() {
 		}
 		robots, _ := robotstxt.FromResponse(resp)
 		if !robots.TestAgent(getpath, Agent) {
-			saveRobots(res)
+			saveRobots(savep)
 			continue
 		}
 
@@ -270,12 +282,6 @@ func (p *Page) SaveResources() {
 			// keep going
 			continue
 		}
-		//TODO save to correct path base+res
-		//handle wordpress path
-		direxp := regexp.MustCompile("/$")
-		if direxp.MatchString(resurl.Path) {
-			resurl.Path = resurl.Path[:len(resurl.Path)-1]
-		}
 
 		b, err := ioutil.ReadAll(p.Response.Body)
 		if err != nil {
@@ -283,23 +289,23 @@ func (p *Page) SaveResources() {
 			continue
 		}
 
-		//TODO get correct path
-		// /img/http://www.indiajoze.com/images/haji_firuz.jpg
-		splitpath := strings.Split(res, "/")
-		savep := SavePath + "/" + splitpath[1] + "/" + splitpath[4] + resurl.Path
-
-		err = os.MkdirAll(filepath.Dir(savep), os.ModePerm)
+		f, err := createFile(savep)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating path to save. [%s]\n", err)
 			continue
 		}
-
-		fmt.Println("Saving File ", savep)
-		f, err := os.Create(savep)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating file. [%s]\n", err)
-			continue
-		}
+		//
+		//		err = os.MkdirAll(filepath.Dir(savep), os.ModePerm)
+		//		if err != nil {
+		//			fmt.Fprintf(os.Stderr, "Error creating path to save. [%s]\n", err)
+		//			continue
+		//		}
+		//
+		//		fmt.Println("Saving File ", savep)
+		//		f, err := os.Create(savep)
+		//		if err != nil {
+		//			fmt.Fprintf(os.Stderr, "Error creating file. [%s]\n", err)
+		//			continue
+		//		}
 
 		n, err := f.Write(b)
 		if err != nil {
@@ -314,5 +320,33 @@ func (p *Page) SaveResources() {
 }
 
 func saveRobots(path string) {
+	f, err := createFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating file")
+		return
+	}
+	b := []byte("<h1>This file has been protected by robots.txt<h1>")
+	_, err = f.Write(b)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing robot file. [%s]\n", err)
+	}
+	f.Close()
+
 	fmt.Println("File protected by robots.txt ", path)
+}
+
+func createFile(path string) (*os.File, error) {
+	err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating path to save. [%s]\n", err)
+		return nil, err
+	}
+
+	fmt.Println("Saving File ", path)
+	f, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating file. [%s]\n", err)
+		return nil, err
+	}
+	return f, nil
 }
